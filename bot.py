@@ -129,7 +129,9 @@ async def ask_claude(user_message: str, chat_id: int) -> dict:
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
+        logger.info(f"Claude raw response: {raw}")
         parsed = json.loads(raw.strip())
+        logger.info(f"Claude parsed: {parsed}")
         conversation_history[chat_id].append({"role": "assistant", "content": raw})
         return parsed
 
