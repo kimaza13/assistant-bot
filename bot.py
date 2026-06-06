@@ -176,17 +176,26 @@ def format_calc_result(data: dict, reply: str) -> str:
     def fmt(n):
         return f"{int(n):,}".replace(",", " ")
     car = data.get("car", "Авто")
+    price_krw = data.get("price_krw", 0)
+    price_usd = round(price_krw / 1350)
+    price_eur = round(price_usd * 0.92)
+    price_rub = data.get("price_rub", 0)
+    customs_rub = data.get("customs_rub", 0)
+    util_rub = data.get("util_rub", 0)
+    total_rub = data.get("total_rub", 0)
     lines = [
         f"🚗 *{car}*",
         f"",
-        f"💰 Цена авто: {fmt(data['price_rub'])}₽  (~{fmt(data['price_krw'])}₩)",
-        f"🛃 Таможня: {fmt(data['customs_rub'])}₽",
-        f"♻️ Утилсбор: {fmt(data['util_rub'])}₽",
-        f"📋 Брокер: {fmt(data.get('broker_rub', 25000))}₽",
-        f"🚢 Логистика: {fmt(data.get('logistics_rub', 150000))}₽",
-        f"🏢 Услуги: {fmt(data.get('service_rub', 100000))}₽",
+        f"📊 *Курсы:* $1 = 1 350₩ | $1 = 1 380₽ | €1 = 1 500₽",
         f"",
-        f"✅ *Итого под ключ: {fmt(data['total_rub'])}₽*",
+        f"💰 Цена авто: {fmt(price_krw)}₩ → ~${fmt(price_usd)} → {fmt(price_rub)}₽",
+        f"🛃 Таможенная пошлина: {fmt(customs_rub)}₽",
+        f"♻️ Утильсбор: {fmt(util_rub)}₽",
+        f"📋 Брокер: 25 000₽",
+        f"🚢 Логистика: 150 000₽",
+        f"🏢 Услуги компании: 100 000₽",
+        f"",
+        f"✅ *Итого под ключ: {fmt(total_rub)}₽*",
     ]
     return "\n".join(lines)
 
