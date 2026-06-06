@@ -23,6 +23,9 @@ GOOGLE_TOKEN_JSON = os.environ["GOOGLE_TOKEN_JSON"]
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "")
 
 groq_client = groq.Groq(api_key=GROQ_API_KEY)
+# Память диалогов (chat_id -> список сообщений)
+conversation_history = {}
+MAX_HISTORY = 10
 
 SYSTEM_PROMPT = """Ты умный ассистент для экспортёра автомобилей из Кореи в СНГ.
 Анализируй запрос и отвечай ТОЛЬКО валидным JSON без markdown.
@@ -89,13 +92,22 @@ async def transcribe_voice(file_path: str) -> str:
     return result.text.strip()
 
 
-async def ask_claude(user_message: str) -> dict:
+async def ask_claude(user_message: str, chat_id: int) -> dict:
     now = datetime.now()
     weekdays = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
     system = SYSTEM_PROMPT.format(
         today=now.strftime("%d.%m.%Y"),
         weekday=weekdays[now.weekday()]
     )
+
+    if chat_id not in conversation_history:
+        conversation_history[chat_id] = []
+
+    conversation_history[chat_id].append({"role": "user", "content": user_message})
+
+    if len(conversation_history[chat_id]) > MAX_HISTORY * 2:
+        conversation_history[chat_id] = conversation_history[chat_id][-MAX_HISTORY * 2:]
+
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
             "https://api.anthropic.com/v1/messages",
@@ -108,7 +120,7 @@ async def ask_claude(user_message: str) -> dict:
                 "model": "claude-haiku-4-5-20251001",
                 "max_tokens": 1024,
                 "system": system,
-                "messages": [{"role": "user", "content": user_message}],
+                "messages": conversation_history[chat_id],
             },
         )
         data = resp.json()
@@ -117,7 +129,9 @@ async def ask_claude(user_message: str) -> dict:
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
-        return json.loads(raw.strip())
+        parsed = json.loads(raw.strip())
+        conversation_history[chat_id].append({"role": "assistant", "content": raw})
+        return parsed
 
 
 def create_calendar_event(title: str, date: str, time: str, duration_hours: float = 1) -> str:
@@ -190,7 +204,7 @@ def format_calendar_result(data: dict, reply: str) -> str:
 
 async def process_message(update: Update, text: str):
     try:
-        result = await ask_claude(text)
+        result = await ask_claude(text, update.message.chat_id)
         intent = result.get("intent")
         reply = result.get("reply", "")
         data = result.get("data", {})
@@ -260,9 +274,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode="Markdown")
 
 
+
+async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.message.chat_id
+    if chat_id in conversation_history:
+        conversation_history[chat_id] = []
+    await update.message.reply_text("🔄 История диалога очищена")
+
+
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("reset", reset))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
