@@ -262,7 +262,7 @@ def format_dealer_card(data: dict) -> str:
     ostatok_base = price - zalog - torg
     ostatok_total = ostatok_base + medobi
     lines = [
-        f"💳 *Карточка авто*",
+        f"� *Расчёт с дилером*",
         f"",
         f"Цена авто: по сайту {fmt(price)}",
         f"Медоби: {fmt(medobi)}",
