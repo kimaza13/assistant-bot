@@ -105,7 +105,7 @@ async def ask_claude(user_message: str) -> dict:
                 "content-type": "application/json",
             },
             json={
-                "model": "claude-haiku-4-5",
+                "model": "claude-haiku-4-5-20251001",
                 "max_tokens": 1024,
                 "system": system,
                 "messages": [{"role": "user", "content": user_message}],
