@@ -142,6 +142,53 @@ async def transcribe_voice(file_path: str) -> str:
         )
     return result.text.strip()
 
+    def calculate_customs(price_krw: float, engine_cc: int, age: str, engine_type: str, rates: dict) -> dict:
+        usd_krw = rates["usd_krw"]
+        usd_rub = rates["usd_rub"]
+        eur_rub = rates["eur_rub"]
+    
+        price_usd = price_krw / usd_krw
+        price_eur = price_usd / 1.09
+    
+        # Таможенная пошлина (единая ставка за см³)
+        if age == "new":  # до 3 лет
+            if price_eur <= 8500:
+                rate_eur = 2.5
+            elif price_eur <= 16700:
+                rate_eur = 3.5
+            else:
+                rate_eur = 5.5
+        elif age == "3-5":
+            rate_eur = 2.5
+        elif age == "5-7":
+            rate_eur = 2.5
+        else:  # старше 7 лет
+            if engine_cc <= 1000:
+                rate_eur = 1.4
+            elif engine_cc <= 1500:
+                rate_eur = 1.5
+            elif engine_cc <= 1800:
+                rate_eur = 1.7
+            elif engine_cc <= 2300:
+                rate_eur = 2.5
+            elif engine_cc <= 3000:
+                rate_eur = 2.7
+            else:
+                rate_eur = 3.0
+    
+        customs = round(rate_eur * engine_cc * eur_rub + 4924)
+    
+        # Утильсбор (физлицо, первая машина)
+        util = 5200
+    
+        return {
+            "customs_rub": customs,
+            "util_rub": util,
+            "price_usd": round(price_usd),
+            "price_rub": round(price_usd * usd_rub),
+            "price_eur": round(price_eur),
+        }
+
 
 async def ask_claude(user_message: str, chat_id: int) -> dict:
     now = datetime.now()
@@ -322,10 +369,34 @@ async def process_message(update: Update, text: str):
         data = result.get("data", {})
 
         if intent == "calc":
-            msg = format_calc_result(data, reply)
+            rates = await get_exchange_rates()
+            calc = calculate_customs(
+                price_krw=data.get("price_krw", 0),
+                engine_cc=data.get("engine_cc", 1600),
+                age=data.get("age", "3-5"),
+                engine_type=data.get("engine_type", "бензин"),
+                rates=rates,
+            )
+            data.update(calc)
+            data["usd_krw"] = rates["usd_krw"]
+            data["usd_rub"] = rates["usd_rub"]
+            data["eur_rub"] = rates["eur_rub"]
+            msg = format_calc_result(data, data.get("reply", ""))
             await update.message.reply_text(msg, parse_mode="Markdown")
 
         elif intent == "full_calc":
+            rates = await get_exchange_rates()
+            calc = calculate_customs(
+                price_krw=data.get("total_krw", data.get("price_krw", 0)),
+                engine_cc=data.get("engine_cc", 1600),
+                age=data.get("age", "3-5"),
+                engine_type=data.get("engine_type", "бензин"),
+                rates=rates,
+            )
+            data.update(calc)
+            data["usd_krw"] = rates["usd_krw"]
+            data["usd_rub"] = rates["usd_rub"]
+            data["eur_rub"] = rates["eur_rub"]
             msg = format_full_calc(data)
             await update.message.reply_text(msg, parse_mode="Markdown")
 
