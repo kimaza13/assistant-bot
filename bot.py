@@ -124,6 +124,9 @@ async def ask_claude(user_message: str, chat_id: int) -> dict:
             },
         )
         data = resp.json()
+        logger.info(f"Anthropic API response: {data}")
+        if "error" in data:
+            raise Exception(f"API error: {data['error']}")
         raw = data["content"][0]["text"].strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
