@@ -65,6 +65,11 @@ SYSTEM_PROMPT = """Ты умный ассистент для экспортёр�
 Формат ответа:
 {"intent":"calc","reply":"итог текстом","data":{"car":"название","price_krw":число,"price_rub":число,"price_eur":число,"customs_rub":число,"util_rub":число,"broker_rub":25000,"logistics_rub":150000,"service_rub":100000,"total_rub":число,"usd_krw":число,"usd_rub":число,"eur_rub":число}}
 
+Если запрос содержит цену авто И расходы по Корее (фрахт) — используй intent "full_calc":
+{"intent":"full_calc","reply":"итог","data":{"car":"название","year":число,"age":"new|3-5|5-7|7+","engine_cc":число,"engine_type":"бензин|дизель|гибрид|электро","price_krw":число,"korea_expenses_krw":число,"total_krw":число,"price_usd":число,"price_rub":число,"customs_rub":число,"util_rub":число,"delivery_msk_rub":число,"usd_krw":число,"usd_rub":число,"eur_rub":число}}
+
+Если не хватает данных для full_calc (нет объёма или возраста) — используй intent "clarify".
+
 === 2. КАРТОЧКА ДИЛЕРА ===
 Когда называют цену авто, медоби, торг и залог — считай остаток дилеру.
 Формула: остаток_база = цена - залог - торг, итого = остаток_база + медоби
@@ -221,6 +226,52 @@ def format_calc_result(data: dict, reply: str) -> str:
     return "\n".join(lines)
 
 
+def format_full_calc(data: dict) -> str:
+    def fmt(n):
+        return f"{int(n):,}".replace(",", " ")
+    
+    car = data.get("car", "Авто")
+    price_krw = data.get("price_krw", 0)
+    korea_exp = data.get("korea_expenses_krw", 0)
+    total_krw = price_krw + korea_exp
+    usd_krw = data.get("usd_krw", 1350)
+    usd_rub = data.get("usd_rub", 1380)
+    eur_rub = data.get("eur_rub", 1500)
+    total_usd = round(total_krw / usd_krw)
+    total_rub = round(total_usd * usd_rub)
+    customs = data.get("customs_rub", 0)
+    util = data.get("util_rub", 0)
+    broker = 110000
+    contract = 100000
+    delivery = data.get("delivery_msk_rub", 0)
+    total_vldk = total_rub + customs + util + broker + contract
+    total_msk = total_vldk + delivery
+
+    lines = [
+        f"🚗 *{car}*",
+        f"",
+        f"📊 *Курсы:* $1 = {usd_krw:.0f}₩ | $1 = {usd_rub:.2f}₽ | €1 = {eur_rub:.2f}₽",
+        f"",
+        f"🇰🇷 *Корея*",
+        f"Цена авто: {fmt(price_krw)}₩",
+        f"Расходы + фрахт: {fmt(korea_exp)}₩",
+        f"Итого KRW: {fmt(total_krw)}₩ → ~${fmt(total_usd)} → {fmt(total_rub)}₽",
+        f"",
+        f"🇷🇺 *Россия*",
+        f"Таможня: {fmt(customs)}₽",
+        f"Утильсбор: {fmt(util)}₽",
+        f"Брокерские: {fmt(broker)}₽",
+        f"Договор за услугу: {fmt(contract)}₽",
+        f"",
+        f"📦 *Total ВДК: {fmt(total_vldk)}₽*",
+    ]
+    if delivery > 0:
+        lines.append(f"🚛 Доставка ВДК→МСК: {fmt(delivery)}₽")
+        lines.append(f"🏁 *Total МСК: {fmt(total_msk)}₽*")
+    
+    return "\n".join(lines)
+
+
 def format_calendar_result(data: dict, reply: str) -> str:
     date_str = data.get("date", "")
     time_str = data.get("time", "")
@@ -243,6 +294,10 @@ async def process_message(update: Update, text: str):
 
         if intent == "calc":
             msg = format_calc_result(data, reply)
+            await update.message.reply_text(msg, parse_mode="Markdown")
+
+        elif intent == "full_calc":
+            msg = format_full_calc(data)
             await update.message.reply_text(msg, parse_mode="Markdown")
 
         elif intent == "dealer":
