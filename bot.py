@@ -95,10 +95,7 @@ async def transcribe_voice(file_path: str) -> str:
 async def ask_claude(user_message: str, chat_id: int) -> dict:
     now = datetime.now()
     weekdays = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
-    system = SYSTEM_PROMPT.format(
-        today=now.strftime("%d.%m.%Y"),
-        weekday=weekdays[now.weekday()]
-    )
+    system = SYSTEM_PROMPT.replace("{today}", now.strftime("%d.%m.%Y")).replace("{weekday}", weekdays[now.weekday()])
 
     if chat_id not in conversation_history:
         conversation_history[chat_id] = []
