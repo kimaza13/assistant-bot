@@ -27,6 +27,23 @@ groq_client = groq.Groq(api_key=GROQ_API_KEY)
 conversation_history = {}
 MAX_HISTORY = 10
 
+
+async def get_exchange_rates() -> dict:
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get("https://open.er-api.com/v6/latest/USD")
+            data = resp.json()
+            usd_to_krw = data["rates"]["KRW"]
+            usd_to_rub = data["rates"]["RUB"]
+            usd_to_eur = 1 / data["rates"]["EUR"]
+            return {
+                "usd_krw": usd_to_krw,
+                "usd_rub": usd_to_rub,
+                "eur_rub": usd_to_eur * usd_to_rub,
+            }
+    except:
+        return {"usd_krw": 1350, "usd_rub": 1380, "eur_rub": 1500}
+
 SYSTEM_PROMPT = """Ты умный ассистент для экспортёра автомобилей из Кореи в СНГ.
 Анализируй запрос и отвечай ТОЛЬКО валидным JSON без markdown.
 
@@ -46,7 +63,7 @@ SYSTEM_PROMPT = """Ты умный ассистент для экспортёр�
 Итого = цена_руб + таможня + утилсбор + 275000
 
 Формат ответа:
-{"intent":"calc","reply":"итог текстом","data":{"car":"название","price_krw":число,"price_rub":число,"price_eur":число,"customs_rub":число,"util_rub":число,"broker_rub":25000,"logistics_rub":150000,"service_rub":100000,"total_rub":число}}
+{"intent":"calc","reply":"итог текстом","data":{"car":"название","price_krw":число,"price_rub":число,"price_eur":число,"customs_rub":число,"util_rub":число,"broker_rub":25000,"logistics_rub":150000,"service_rub":100000,"total_rub":число,"usd_krw":число,"usd_rub":число,"eur_rub":число}}
 
 === 2. КАРТОЧКА ДИЛЕРА ===
 Когда называют цену авто, медоби, торг и залог — считай остаток дилеру.
@@ -104,6 +121,10 @@ async def ask_claude(user_message: str, chat_id: int) -> dict:
 
     if len(conversation_history[chat_id]) > MAX_HISTORY * 2:
         conversation_history[chat_id] = conversation_history[chat_id][-MAX_HISTORY * 2:]
+
+    rates = await get_exchange_rates()
+    rates_info = f"Актуальные курсы: $1={rates['usd_krw']:.0f}₩, $1={rates['usd_rub']:.2f}₽, €1={rates['eur_rub']:.2f}₽"
+    system = system + f"\n\nИСПОЛЬЗУЙ ЭТИ АКТУАЛЬНЫЕ КУРСЫ ДЛЯ РАСЧЁТА: {rates_info}"
 
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
@@ -186,7 +207,7 @@ def format_calc_result(data: dict, reply: str) -> str:
     lines = [
         f"🚗 *{car}*",
         f"",
-        f"📊 *Курсы:* $1 = 1 350₩ | $1 = 1 380₽ | €1 = 1 500₽",
+        f"📊 *Курсы:* $1 = {data.get('usd_krw', 1350):.0f}₩ | $1 = {data.get('usd_rub', 1380):.2f}₽ | €1 = {data.get('eur_rub', 1500):.2f}₽",
         f"",
         f"💰 Цена авто: {fmt(price_krw)}₩ → ~${fmt(price_usd)} → {fmt(price_rub)}₽",
         f"🛃 Таможенная пошлина: {fmt(customs_rub)}₽",
