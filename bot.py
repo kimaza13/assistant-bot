@@ -118,7 +118,11 @@ SYSTEM_PROMPT = """Ты умный универсальный ассистент
 {"intent":"clarify","reply":"какой вопрос задать"}
 
 === 5. ЧАТ ===
-{"intent":"chat","reply":"ответ"}"""
+{"intent":"chat","reply":"ответ"}
+
+=== 6. ПЕРЕВОДЧИК ===
+Когда просят перевести текст на другой язык (корейский, русский, английский, узбекский и т.д.):
+{"intent":"translate","reply":"","data":{"text":"что переводить","target_lang":"korean|russian|english|uzbek"}}"""
 
 
 def get_calendar_service():
@@ -421,7 +425,42 @@ async def process_message(update: Update, text: str):
         elif intent == "clarify":
             await update.message.reply_text(f"🤔 {reply}")
 
-        else:
+        elif intent == "translate":
+                        text_to_translate = data.get("text", "")
+                    target_lang = data.get("target_lang", "korean")
+    
+                lang_prompts = {
+                                    "korean": "корейский язык. Используй естественный стиль как носитель. Уровень вежливости 해요체 для нейтрального, 합쇼체 для делового.",
+                    "russian": "русский язык. Переводи естественно, как носитель, не дословно.",
+                    "english": "английский язык. Переводи естественно, как носитель.",
+                    "uzbek": "узбекский язык. Переводи естественно, как носитель.",
+                }
+    
+                translate_prompt = f"Переведи на {lang_prompts.get(target_lang, target_lang)}. Верни ТОЛЬКО перевод, без пояснений.\n\nТекст: {text_to_translate}"
+    
+                async with httpx.AsyncClient(timeout=30) as client:
+                                    resp = await client.post(
+                                                            "https://api.anthropic.com/v1/messages",
+                                                            headers={
+                                                                                        "x-api-key": ANTHROPIC_API_KEY,
+                                                                                        "anthropic-version": "2023-06-01",
+                                                                                        "content-type": "application/json",
+                                                            },
+                                                            json={
+                                                                                        "model": "claude-haiku-4-5-20251001",
+                                                                                        "max_tokens": 1024,
+                                                                                        "system": "Ты профессиональный переводчик-носитель. Переводишь естественно, как живой человек. Только перевод, без пояснений.",
+                                                                                        "messages": [{"role": "user", "content": translate_prompt}],
+                                                            },
+                                    )
+                    tr_data = resp.json()
+                    translated = tr_data["content"][0]["text"].strip()
+    
+                flags = {"korean": "🇰🇷", "russian": "🇷🇺", "english": "🇺🇸", "uzbek": "🇺🇿"}
+                flag = flags.get(target_lang, "🌐")
+                await update.message.reply_text(f"{flag} {translated}")
+    
+    else:
             await update.message.reply_text(reply)
 
     except Exception as e:
@@ -442,7 +481,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as tmp:
         await file.download_to_drive(tmp.name)
         text = await transcribe_voice(tmp.name)
-    await update.message.reply_text(f"🎤 _{text}_", parse_mode="Markdown")
+    await update.message.reply_text(f"🎤 _{text}_", parse_mode="Markdown"
     await process_message(update, text)
 
 
