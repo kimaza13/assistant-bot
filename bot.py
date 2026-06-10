@@ -23,7 +23,6 @@ GOOGLE_TOKEN_JSON = os.environ["GOOGLE_TOKEN_JSON"]
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "")
 
 groq_client = groq.Groq(api_key=GROQ_API_KEY)
-# Память диалогов (chat_id -> список сообщений)
 conversation_history = {}
 MAX_HISTORY = 10
 
@@ -152,12 +151,11 @@ def calculate_customs(price_krw: float, engine_cc: int, age: str, engine_type: s
     usd_krw = rates["usd_krw"]
     usd_rub = rates["usd_rub"]
     eur_rub = rates["eur_rub"]
-    
+
     price_usd = price_krw / usd_krw
     price_eur = price_usd / 1.09
-    
-    # Таможенная пошлина (единая ставка за см³)
-    if age == "new":  # до 3 лет
+
+    if age == "new":
         if price_eur <= 8500:
             rate_eur = 2.5
         elif price_eur <= 16700:
@@ -166,7 +164,7 @@ def calculate_customs(price_krw: float, engine_cc: int, age: str, engine_type: s
             rate_eur = 5.5
     elif age in ["3-5", "5-7"]:
         rate_eur = 2.5
-    else:  # старше 7 лет
+    else:
         if engine_cc <= 1000:
             rate_eur = 1.4
         elif engine_cc <= 1500:
@@ -179,12 +177,10 @@ def calculate_customs(price_krw: float, engine_cc: int, age: str, engine_type: s
             rate_eur = 2.7
         else:
             rate_eur = 3.0
-    
+
     customs = round(rate_eur * engine_cc * eur_rub + 4924)
-    
-    # Утильсбор (физлицо, первая машина)
     util = 5200
-    
+
     return {
         "customs_rub": customs,
         "util_rub": util,
@@ -309,7 +305,7 @@ def format_calc_result(data: dict, reply: str) -> str:
 def format_full_calc(data: dict) -> str:
     def fmt(n):
         return f"{int(n):,}".replace(",", " ")
-    
+
     car = data.get("car", "Авто")
     price_krw = data.get("price_krw", 0)
     korea_exp = data.get("korea_expenses_krw", 0)
@@ -348,7 +344,7 @@ def format_full_calc(data: dict) -> str:
     if delivery > 0:
         lines.append(f"🚛 Доставка ВДК→МСК: {fmt(delivery)}₽")
         lines.append(f"🏁 *Total МСК: {fmt(total_msk)}₽*")
-    
+
     return "\n".join(lines)
 
 
@@ -426,41 +422,41 @@ async def process_message(update: Update, text: str):
             await update.message.reply_text(f"🤔 {reply}")
 
         elif intent == "translate":
-                        text_to_translate = data.get("text", "")
-                    target_lang = data.get("target_lang", "korean")
-    
-                lang_prompts = {
-                                    "korean": "корейский язык. Используй естественный стиль как носитель. Уровень вежливости 해요체 для нейтрального, 합쇼체 для делового.",
-                    "russian": "русский язык. Переводи естественно, как носитель, не дословно.",
-                    "english": "английский язык. Переводи естественно, как носитель.",
-                    "uzbek": "узбекский язык. Переводи естественно, как носитель.",
-                }
-    
-                translate_prompt = f"Переведи на {lang_prompts.get(target_lang, target_lang)}. Верни ТОЛЬКО перевод, без пояснений.\n\nТекст: {text_to_translate}"
-    
-                async with httpx.AsyncClient(timeout=30) as client:
-                                    resp = await client.post(
-                                                            "https://api.anthropic.com/v1/messages",
-                                                            headers={
-                                                                                        "x-api-key": ANTHROPIC_API_KEY,
-                                                                                        "anthropic-version": "2023-06-01",
-                                                                                        "content-type": "application/json",
-                                                            },
-                                                            json={
-                                                                                        "model": "claude-haiku-4-5-20251001",
-                                                                                        "max_tokens": 1024,
-                                                                                        "system": "Ты профессиональный переводчик-носитель. Переводишь естественно, как живой человек. Только перевод, без пояснений.",
-                                                                                        "messages": [{"role": "user", "content": translate_prompt}],
-                                                            },
-                                    )
-                    tr_data = resp.json()
-                    translated = tr_data["content"][0]["text"].strip()
-    
-                flags = {"korean": "🇰🇷", "russian": "🇷🇺", "english": "🇺🇸", "uzbek": "🇺🇿"}
-                flag = flags.get(target_lang, "🌐")
-                await update.message.reply_text(f"{flag} {translated}")
-    
-    else:
+            text_to_translate = data.get("text", "")
+            target_lang = data.get("target_lang", "korean")
+
+            lang_prompts = {
+                "korean": "корейский язык. Используй естественный стиль как носитель. Уровень вежливости 해요체 для нейтрального, 합쇼체 для делового.",
+                "russian": "русский язык. Переводи естественно, как носитель, не дословно.",
+                "english": "английский язык. Переводи естественно, как носитель.",
+                "uzbek": "узбекский язык. Переводи естественно, как носитель.",
+            }
+
+            translate_prompt = f"Переведи на {lang_prompts.get(target_lang, target_lang)}. Верни ТОЛЬКО перевод, без пояснений.\n\nТекст: {text_to_translate}"
+
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": ANTHROPIC_API_KEY,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": "claude-haiku-4-5-20251001",
+                        "max_tokens": 1024,
+                        "system": "Ты профессиональный переводчик-носитель. Переводишь естественно, как живой человек. Только перевод, без пояснений.",
+                        "messages": [{"role": "user", "content": translate_prompt}],
+                    },
+                )
+                tr_data = resp.json()
+                translated = tr_data["content"][0]["text"].strip()
+
+            flags = {"korean": "🇰🇷", "russian": "🇷🇺", "english": "🇺🇸", "uzbek": "🇺🇿"}
+            flag = flags.get(target_lang, "🌐")
+            await update.message.reply_text(f"{flag} {translated}")
+
+        else:
             await update.message.reply_text(reply)
 
     except Exception as e:
@@ -481,7 +477,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as tmp:
         await file.download_to_drive(tmp.name)
         text = await transcribe_voice(tmp.name)
-    await update.message.reply_text(f"🎤 _{text}_", parse_mode="Markdown"
+    await update.message.reply_text(f"🎤 _{text}_", parse_mode="Markdown")
     await process_message(update, text)
 
 
@@ -498,7 +494,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• _Завтра в 10 созвон с Рашитом_"
     )
     await update.message.reply_text(msg, parse_mode="Markdown")
-
 
 
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
